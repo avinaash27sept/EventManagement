@@ -1,0 +1,8 @@
+{
+  "host": "smtp.gmail.com",
+  "port": 587,
+  "starttls": true,
+  "user": "avinaash27sept@gmail.com",
+  "password": "vtif jwff miig bpvn",
+  "from": "Workshop Team <your@gmail.com>"
+}
