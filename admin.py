@@ -5,6 +5,10 @@ import io
 import csv
 from urllib.parse import urlparse
 from db import init_db, get_session, Event, Registration
+from db import Feedback
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+import io as _io
 
 init_db()
 
@@ -80,6 +84,94 @@ sess = get_session()
 registrations_short = sess.query(Registration).order_by(Registration.registered_at.desc()).limit(200).all()
 for a in registrations_short:
     st.write(f"{a.name} — {a.email} — Event ID {a.workshop_id} — Score: {a.score}")
+
+st.markdown("---")
+st.header("Feedback control")
+sess = get_session()
+workshops = sess.query(Event).order_by(Event.id.desc()).all()
+if not workshops:
+    st.info("No events available to control feedback for.")
+else:
+    for w in workshops:
+        col1, col2 = st.columns([6,1])
+        with col1:
+            st.write(f"{w.id}: {w.title}")
+        with col2:
+            enabled = st.checkbox("Show feedback", value=bool(w.feedback_enabled), key=f"fb_{w.id}")
+            if enabled != bool(w.feedback_enabled):
+                w.feedback_enabled = bool(enabled)
+                sess.add(w)
+                sess.commit()
+                if enabled:
+                    st.success("Feedback enabled for this workshop")
+                else:
+                    st.info("Feedback disabled for this workshop")
+        # Feedback report button
+        if st.button("Generate feedback PDF", key=f"pdf_{w.id}"):
+            # generate PDF in memory
+            sess = get_session()
+            rows = sess.query(Feedback).filter(Feedback.workshop_id==w.id).order_by(Feedback.submitted_at.desc()).all()
+            buf = _io.BytesIO()
+            c = canvas.Canvas(buf, pagesize=A4)
+            width, height = A4
+            y = height - 50
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(40, y, f"Feedback report — {w.title}")
+            y -= 30
+            c.setFont("Helvetica", 12)
+            total = len(rows)
+            if total == 0:
+                c.drawString(40, y, "No feedback submitted yet.")
+            else:
+                # compute averages
+                avg = [0,0,0,0,0]
+                for r in rows:
+                    avg[0] += (r.q1 or 0)
+                    avg[1] += (r.q2 or 0)
+                    avg[2] += (r.q3 or 0)
+                    avg[3] += (r.q4 or 0)
+                    avg[4] += (r.q5 or 0)
+                avg = [round(v/total,2) for v in avg]
+                c.drawString(40, y, f"Total responses: {total}")
+                y -= 20
+                c.drawString(40, y, f"Average scores: Q1={avg[0]}  Q2={avg[1]}  Q3={avg[2]}  Q4={avg[3]}  Q5={avg[4]}")
+                y -= 30
+                c.setFont("Helvetica-Bold", 12)
+                c.drawString(40, y, "Recent responses:")
+                y -= 20
+                c.setFont("Helvetica", 10)
+                for r in rows[:50]:
+                    line = f"{r.submitted_at.strftime('%Y-%m-%d %H:%M')} — {r.email or 'N/A'} — {r.q1},{r.q2},{r.q3},{r.q4},{r.q5}"
+                    if y < 60:
+                        c.showPage()
+                        y = height - 50
+                        c.setFont("Helvetica", 10)
+                    c.drawString(40, y, line)
+                    y -= 14
+                y -= 10
+                if any(r.comments for r in rows):
+                    c.setFont("Helvetica-Bold", 12)
+                    c.drawString(40, y, "Comments:")
+                    y -= 20
+                    c.setFont("Helvetica", 10)
+                    for r in rows:
+                        if not r.comments:
+                            continue
+                        txt = f"{r.submitted_at.strftime('%Y-%m-%d')} {r.email or 'N/A'}: {r.comments}"
+                        # wrap long comments
+                        maxlen = 90
+                        parts = [txt[i:i+maxlen] for i in range(0, len(txt), maxlen)]
+                        for p in parts:
+                            if y < 60:
+                                c.showPage()
+                                y = height - 50
+                                c.setFont("Helvetica", 10)
+                            c.drawString(40, y, p)
+                            y -= 12
+                        y -= 6
+            c.save()
+            buf.seek(0)
+            st.download_button(label="Download PDF", data=buf.read(), file_name=f"feedback_{w.id}.pdf", mime="application/pdf")
 
 st.header("Webhook test")
 st.write("Use this to POST a test registration or quiz to the webhook server.")

@@ -4,5 +4,6 @@
   "starttls": true,
   "user": "avinaash27sept@gmail.com",
   "password": "vtif jwff miig bpvn",
-  "from": "Workshop Team <your@gmail.com>"
+  "from": "Workshop Team <avinaash27sept@gmail.com>",
+  "debug": true
 }
