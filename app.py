@@ -115,7 +115,7 @@ else:
                                     st.download_button(label="Download schedule (PDF)", data=data, file_name=os.path.basename(attachments[0]), mime="application/pdf")
 
             # Feedback form (shown when admin enables it)
-            if getattr(w, 'feedback_enabled', False):
+            if getattr(w, 'feedback_enabled', True):
                 st.markdown("---")
                 st.subheader("Workshop Feedback")
                 st.write("Please rate the following from 1 (lowest) to 10 (highest).")
